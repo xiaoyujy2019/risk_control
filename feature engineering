@@ -1,0 +1,102 @@
+# -*- coding: utf-8 -*-
+import pandas as pd
+import numpy as np
+train = pd.read_csv('H:\\train.csv') 
+target=pd.read_csv('H:\\train_target.csv')
+test=pd.read_csv("H:\\test.csv")
+target=target['target']
+#合并
+alldata=pd.concat((train, test))
+train.shape,test.shape,alldata.shape
+#缺失值用均值、中位数、众数替换
+def impute_NA_with(data,strategy='mean',NA_col=[]): 
+    data_copy = data.copy(deep=True)
+    for i in NA_col:
+        if data_copy[i].isnull().sum()>0:
+            if strategy=='mean':
+                data_copy[i+'_impute_mean'] = data_copy[i].fillna(data[i].mean())
+            elif strategy=='median':
+                data_copy[i+'_impute_median'] = data_copy[i].fillna(data[i].median())
+            elif strategy=='mode':
+                data_copy[i+'_impute_mode'] = data_copy[i].fillna(data[i].mode()[0])
+        else:
+            warn("Column %s has no missing" % i)
+    return data_copy  
+# 全为缺失值删除
+alldata.dropna(how='all') 
+# 缺失值进行填充
+alldata = impute_NA_with(alldata) 
+alldata.fillna(0, inplace = True) 
+#年龄异常值处理/分段
+alldata['age'].value_counts()
+alldata.age[alldata.age==117]=alldata.age.mode()[0]
+alldata.age[alldata['age']<=20]=1
+alldata.age[(alldata['age']>20)&(alldata.age<=30)]=2
+alldata.age[(alldata['age']>30)&(alldata.age<=40)]=3
+alldata.age[(alldata['age']>40)&(alldata.age<=80)]=4
+
+alldata.drop (columns=['id'],inplace=True)
+
+#residentAddr居住地和 dist 地区比较 同市县为1 同省委2 异省为3  area_vs
+#residentAddr居住地和 certid比较  同市县为1 同省委2 异省为3  identity_vs
+alldata['province_re']=alldata['residentAddr'].apply(lambda x:x/10000).astype(int)
+alldata['province_dist']=alldata['dist'].apply(lambda x:x/10000).astype(int)
+alldata['province_certId']=alldata['certId'].apply(lambda x:x/10000).astype(int)
+
+alldata['county_re']=alldata['residentAddr'].apply(lambda x:x/100).astype(int)
+alldata['county_dist']=alldata['dist'].apply(lambda x:x/100).astype(int)
+alldata['county_certId']=alldata['certId'].apply(lambda x:x/100).astype(int)
+
+alldata['area1_vs']=alldata.apply(lambda x:1 if (x['county_re']==x['county_dist'] ) else (2 if (x['province_re']==x['province_dist'] ) else (3) ),axis=1 )
+alldata['area2_vs']=alldata.apply(lambda x:1 if (x['county_re']==x['county_certId'] ) else (2 if (x['province_re']==x['province_certId'] ) else (3) ),axis=1 )
+#'dist','residentAddr','certId',
+alldata.drop(columns=['province_re','province_dist','province_certId','county_re',\
+                     'county_dist','county_certId'],inplace=True)
+    
+
+
+#联系人关系,基础评级 众数填充
+alldata.linkRela[alldata.linkRela==-999]=alldata.linkRela.mode()[0]
+alldata.basicLevel[alldata.basicLevel==-999]=alldata.basicLevel.mode()[0]
+
+#处理身份证日期
+alldata['dur']=alldata['certValidStop']-alldata['certValidBegin']
+alldata['dur']=alldata['dur'].apply(lambda x:x/(3600*24*365)).astype(int)
+alldata['dur']=alldata['dur'].apply(lambda x:10 if x<20 else (20 if (x<30|x==20) else 30))
+alldata.drop('certValidBegin',axis=1,inplace=True)
+alldata.drop('certValidStop',axis=1,inplace=True)
+
+#民族 区分汉族和少数民族 汉族0少数民族1
+alldata.ethnic.value_counts()
+alldata.ethnic[alldata.ethnic!=0]=1
+
+
+#申请日期区分工作日1和周末2
+list1=[1,2,3,4,5]
+for i in list1:
+    alldata.weekday[alldata['weekday']==i]=1 
+    list2=[6,7]
+for i in list2:
+    alldata.weekday[alldata['weekday']==i]=2
+    
+#处理申请时段 凌晨 1，白天2， 晚上3
+for k in range(0,9):
+    alldata.setupHour[alldata.setupHour==k]=1
+for k in range(9,18):
+    alldata.setupHour[alldata.setupHour==k]=2
+for k in range(18,25):
+    alldata.setupHour[alldata.setupHour==k]=3
+  
+#训练数据和测试数据
+train=alldata.iloc[0:132029,:]
+test=alldata.iloc[132029:,:]  
+    
+#利用随机森林的feature importance对特征的重要性进行排序。
+from sklearn.ensemble import RandomForestClassifier
+clf=RandomForestClassifier(n_estimators=10,random_state=123)
+clf.fit(train, target) #对自变量和因变量进行拟合
+for feature in zip(train.columns, clf.feature_importances_):
+     print(feature)
+#保存处理好的数据   
+train.to_csv("C:\\Users\\Administrator\\Desktop\\handled\\train2.csv")
+test.to_csv("C:\\Users\\Administrator\\Desktop\\handled\\test2.csv")
