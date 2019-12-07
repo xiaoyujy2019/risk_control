@@ -1,0 +1,74 @@
+# -*- coding: utf-8 -*-
+"""
+Created on Fri Nov  6 14:32:22 2019
+@author: XiaoYu
+"""
+import pandas as pd
+import numpy as np
+from sklearn import metrics
+from sklearn.ensemble import GradientBoostingClassifier 
+from sklearn.ensemble import RandomForestClassifier
+import xgboost as xgb
+from sklearn.model_selection import KFold, train_test_split, GridSearchCV
+from sklearn.preprocessing import StandardScaler  
+
+#读取处理好的数据
+X=pd.read_csv('C:\\Users\\Administrator\\Desktop\\handled\\newtrain.csv')
+Y=pd.read_csv('H:\\train_target.csv')
+test_data=pd.read_csv('C:\\Users\\Administrator\\Desktop\\handled\\newtest.csv')
+Y=Y['target']
+
+#保存AUC最高的模型预测值
+n_splits =7
+kf = KFold(n_splits=n_splits, shuffle=True, random_state=1234)
+max_auc = 0
+for train_index, test_index in kf.split(X):
+    print ( ">>>", train_index )
+    xgboost_model = xgb.XGBClassifier().fit(X.iloc[train_index], Y.iloc[train_index]) 
+  
+    pred = xgboost_model.predict(X.iloc[test_index]) 
+    predprob = xgboost_model.predict_proba(X.iloc[test_index])[:, 1] 
+    predprob2 = xgboost_model.predict_proba(X.iloc[train_index])[:, 1] 
+    print("训练集AUC:%f" % metrics.roc_auc_score(Y.iloc[train_index], predprob2)) 
+    auc=metrics.roc_auc_score(Y.iloc[test_index], predprob)
+    print("测试集AUC:%f" % auc) 
+   #保存最优结果 
+    if auc > max_auc:
+        max_auc = auc
+        print ("auc>>>>>>", auc)
+        pre = xgboost_model.predict_proba(test_data)[:, 1] 
+        c ={ "target" : pre }
+        data_lable = pd.DataFrame(c)
+        id = list(range(132030,155591))
+        c ={ "id" : id, "target" : pre  }
+        res1 = pd.DataFrame(c)
+        res1.to_csv( 'C:\\Users\\Administrator\\Desktop\\xgkfold.csv')  #0.73426
+        print (">>>>", res1)
+              
+#所有结果保存均值
+result= []
+n_splits =7
+kf = KFold(n_splits=n_splits, shuffle=True, random_state=1234)
+max_auc = 0
+for train_index, test_index in kf.split(X):
+    print ( ">>>", train_index )
+    xgboost_model = xgb.XGBClassifier().fit(X.iloc[train_index], Y.iloc[train_index]) 
+  
+    pred = xgboost_model.predict(X.iloc[test_index]) 
+    predprob = xgboost_model.predict_proba(X.iloc[test_index])[:, 1] 
+    predprob2 = xgboost_model.predict_proba(X.iloc[train_index])[:, 1] 
+    print("训练集AUC:%f" % metrics.roc_auc_score(Y.iloc[train_index], predprob2)) 
+    auc=metrics.roc_auc_score(Y.iloc[test_index], predprob)
+    print("测试集AUC:%f" % auc) 
+    k=xgboost_model.predict_proba(test_data)[:, 1]
+    result.append(k)
+    print(">>>",result)#最终预测结果
+
+result=pd.DataFrame(result).T
+result=result.sum(axis=1)/(n_splits)
+
+id = list(range(132030,155591))
+c ={ "id" : id, "target" :result  }
+res = pd.DataFrame(c)
+res.to_csv( 'C:\\Users\\Administrator\\Desktop\\xgkfoldave.csv')  
+print (">>>>", res)
