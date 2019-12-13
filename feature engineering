@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 import pandas as pd
 import numpy as np
+
+
 train = pd.read_csv('H:\\train.csv') 
 target=pd.read_csv('H:\\train_target.csv')
 test=pd.read_csv("H:\\test.csv")
@@ -53,8 +55,6 @@ alldata['area2_vs']=alldata.apply(lambda x:1 if (x['county_re']==x['county_certI
 alldata.drop(columns=['province_re','province_dist','province_certId','county_re',\
                      'county_dist','county_certId'],inplace=True)
     
-
-
 #联系人关系,基础评级 众数填充
 alldata.linkRela[alldata.linkRela==-999]=alldata.linkRela.mode()[0]
 alldata.basicLevel[alldata.basicLevel==-999]=alldata.basicLevel.mode()[0]
@@ -86,17 +86,30 @@ for k in range(9,18):
     alldata.setupHour[alldata.setupHour==k]=2
 for k in range(18,25):
     alldata.setupHour[alldata.setupHour==k]=3
-  
-#训练数据和测试数据
+    
+#划分训练数据和测试数据
 train=alldata.iloc[0:132029,:]
 test=alldata.iloc[132029:,:]  
-    
+
+list=[]
 #利用随机森林的feature importance对特征的重要性进行排序。
 from sklearn.ensemble import RandomForestClassifier
 clf=RandomForestClassifier(n_estimators=10,random_state=123)
 clf.fit(train, target) #对自变量和因变量进行拟合
 for feature in zip(train.columns, clf.feature_importances_):
-     print(feature)
+    list.append(feature)
+    print(feature)   
+kk=pd.DataFrame(list)
+kk.set_index(0,inplace=True)
+useful_index=kk[kk[1]>0].index #重要性>0 的index
+print(useful_index)
+alldata=alldata[useful_index]    
+    
+#训练数据和测试数据
+train=alldata.iloc[0:132029,:]
+test=alldata.iloc[132029:,:]  
+
 #保存处理好的数据   
 train.to_csv("C:\\Users\\Administrator\\Desktop\\handled\\train2.csv")
 test.to_csv("C:\\Users\\Administrator\\Desktop\\handled\\test2.csv")
+
